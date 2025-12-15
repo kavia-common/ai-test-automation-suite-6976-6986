@@ -1,0 +1,4 @@
+{
+    "command": "pytest",
+    "working_directory": "/home/kavia/workspace/code-generation/ai-test-automation-suite-6976-6986/backend"
+}
