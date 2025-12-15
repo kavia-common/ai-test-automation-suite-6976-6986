@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_cors import CORS
 from flask_smorest import Api
@@ -13,8 +14,16 @@ from .realtime import init_app_for_realtime, register_ws_routes, sock  # WebSock
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 
-# Enable CORS for all origins (adjust as needed based on env vars)
-CORS(app, resources={r"/*": {"origins": "*"}})
+# Determine allowed CORS origin:
+# Prefer REACT_APP_FRONTEND_URL if provided (e.g., https://frontend.example.com or http://localhost:3000)
+frontend_origin = os.getenv("REACT_APP_FRONTEND_URL", "").strip() or "http://localhost:3000"
+
+# Enable CORS for the chosen origin; allow credentials if needed in the future
+CORS(
+    app,
+    resources={r"/*": {"origins": [frontend_origin]}},
+    supports_credentials=True,
+)
 
 # OpenAPI/Swagger configuration
 app.config["API_TITLE"] = "My Flask API"
@@ -43,3 +52,8 @@ if sock is not None:
 # Configure runner broadcaster to use realtime hub
 runner = get_runner()
 runner.set_broadcaster(app.config["RUNNER_BROADCASTER"])
+
+# Enrich health metadata in app.config so the health route can report them
+app.config["PORT"] = 3001  # This must align with run.py
+app.config["WS_AVAILABLE"] = bool(sock is not None)
+app.config["ALLOWED_ORIGIN"] = frontend_origin

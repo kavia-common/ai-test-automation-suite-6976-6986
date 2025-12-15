@@ -4,7 +4,7 @@ import json
 import threading
 from typing import Any, Dict, Optional, Set, Iterable
 
-from flask import Blueprint, Response, stream_with_context
+from flask import Blueprint, Response, stream_with_context, current_app
 from flask_cors import cross_origin
 
 try:
@@ -208,7 +208,7 @@ else:
 # ---------- SSE fallback endpoint ----------
 
 @realtime_blp.route("/api/test-runs/<string:run_id>/events", methods=["GET"])
-@cross_origin(origins="*")
+@cross_origin(origins=lambda: [current_app.config.get("ALLOWED_ORIGIN", "*")])
 def sse_events(run_id: str):
     """
     Server-Sent Events endpoint for a specific run.
@@ -231,10 +231,12 @@ def sse_events(run_id: str):
         for frame in event_hub.pull_sse_frames(sub_id):
             yield frame
 
+    # Respect configured CORS origin
+    allowed_origin = current_app.config.get("ALLOWED_ORIGIN", "*")
     headers = {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": allowed_origin,
     }
     return Response(generate(), headers=headers)
