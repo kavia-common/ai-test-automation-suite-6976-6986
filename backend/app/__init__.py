@@ -5,7 +5,9 @@ from flask_smorest import Api
 from .routes.health import blp as health_blp
 from .routes.test_cases import blp as test_cases_blp
 from .routes.ai import blp as ai_blp
+from .routes.test_runs import blp as test_runs_blp
 from .storage.datastore import get_datastore
+from .services.runner import get_runner, BroadcastEvent
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -26,7 +28,16 @@ api = Api(app)
 api.register_blueprint(health_blp)
 api.register_blueprint(test_cases_blp)
 api.register_blueprint(ai_blp)
+api.register_blueprint(test_runs_blp)
 
 # Initialize datastore singleton at startup so it's ready for dependency usage
 # This ensures backend/data directory is created and JSON files are loaded.
 get_datastore()
+
+# Configure runner and a simple no-op broadcaster for now.
+def _no_op_broadcaster(event: BroadcastEvent) -> None:
+    # Placeholder for future WS/SSE integration. Currently does nothing.
+    return None
+
+runner = get_runner()
+runner.set_broadcaster(_no_op_broadcaster)
