@@ -4,6 +4,7 @@ from flask_smorest import Api
 
 from .routes.health import blp as health_blp
 from .routes.test_cases import blp as test_cases_blp
+from .routes.ai import blp as ai_blp
 from .storage.datastore import get_datastore
 
 app = Flask(__name__)
@@ -24,6 +25,7 @@ app.config["OPENAPI_SWAGGER_UI_URL"] = "https://cdn.jsdelivr.net/npm/swagger-ui-
 api = Api(app)
 api.register_blueprint(health_blp)
 api.register_blueprint(test_cases_blp)
+api.register_blueprint(ai_blp)
 
 # Initialize datastore singleton at startup so it's ready for dependency usage
 # This ensures backend/data directory is created and JSON files are loaded.
