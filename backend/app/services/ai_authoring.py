@@ -1,0 +1,184 @@
+from __future__ import annotations
+
+from typing import Dict, List, Any
+
+
+# PUBLIC_INTERFACE
+def generate_suggested_steps(prompt: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Deterministic, offline AI authoring stub that suggests test steps and a rationale.
+
+    This function does not call external APIs. It uses simple parsing and a fixed
+    template to produce predictable suggestions suitable for unblocking the UI.
+
+    Parameters:
+    - prompt: User input describing the test intent.
+    - context: Arbitrary contextual information (e.g., selected project, page hints).
+      The function is pure and does not mutate the provided context.
+
+    Returns:
+    - dict with keys:
+        - suggested_steps: list[dict] - structured step suggestions with fields:
+            - id: stable string identifier within the response (e.g., "S1", "S2", ...)
+            - action: verb describing what to do
+            - target: element or area to act upon
+            - data: optional payload (e.g., credentials, text to type)
+            - expected: expectation/assertion after the action
+        - rationale: str - brief explanation of how the steps were created
+
+    Notes on thread safety:
+    - This function is stateless and pure (no I/O, no shared state), therefore thread-safe.
+    - If in the future you integrate with a datastore, prefer read-only data access within
+      a lock (see app.storage.datastore) or copy data out before processing to remain safe.
+    """
+    normalized = (prompt or "").strip()
+    tokens = _tokenize(normalized)
+
+    # Heuristic extraction: try to detect a target page or entity from the prompt.
+    # Very basic and deterministic: look for common nouns in a simple list.
+    target_hint = _detect_target_hint(tokens, context)
+
+    # Produce a deterministic 4-step template.
+    steps: List[Dict[str, Any]] = [
+        {
+            "id": "S1",
+            "action": "navigate",
+            "target": target_hint or "home page",
+            "data": None,
+            "expected": "Page loads successfully",
+        },
+        {
+            "id": "S2",
+            "action": "interact",
+            "target": "primary input or control",
+            "data": _extract_data_hint(tokens),
+            "expected": "Control accepts input without errors",
+        },
+        {
+            "id": "S3",
+            "action": "submit",
+            "target": "primary action button",
+            "data": None,
+            "expected": "Operation completes and confirmation is visible",
+        },
+        {
+            "id": "S4",
+            "action": "assert",
+            "target": "result area",
+            "data": None,
+            "expected": _derive_expected_outcome(normalized) or "Desired outcome is displayed",
+        },
+    ]
+
+    rationale = _build_rationale(normalized, target_hint, context)
+
+    return {
+        "suggested_steps": steps,
+        "rationale": rationale,
+    }
+
+
+def _tokenize(text: str) -> List[str]:
+    """
+    Deterministic lowercase tokenization on whitespace and punctuation subsets.
+    Avoids regex for simplicity and ensures stable results.
+    """
+    if not text:
+        return []
+    # Replace a small set of punctuation chars with space to split deterministically.
+    buf = []
+    for ch in text.lower():
+        if ch in ",.;:!?()[]{}|/\\\"'":
+            buf.append(" ")
+        else:
+            buf.append(ch)
+    merged = "".join(buf)
+    parts = [p for p in merged.split() if p]
+    return parts
+
+
+def _detect_target_hint(tokens: List[str], context: Dict[str, Any]) -> str:
+    """
+    Try to find a target hint from the context or the tokens.
+    Priority:
+      1) context['page'] or context['target']
+      2) Known keywords from tokens (e.g., 'login', 'dashboard', 'checkout')
+      3) Fallback None
+    """
+    # Context first
+    page = (context or {}).get("page")
+    if isinstance(page, str) and page.strip():
+        return page.strip()
+    target = (context or {}).get("target")
+    if isinstance(target, str) and target.strip():
+        return target.strip()
+
+    # Token-based guess
+    known = ["login", "signin", "dashboard", "settings", "profile", "checkout", "cart", "home"]
+    for k in known:
+        if k in tokens:
+            # Provide a user-readable page name
+            return f"{k} page"
+
+    return ""
+
+
+def _extract_data_hint(tokens: List[str]) -> Any:
+    """
+    Attempt to derive simple input data hints based on tokens.
+    Deterministic mapping with no external calls.
+    """
+    # Simple deterministic hints
+    if "login" in tokens or "signin" in tokens:
+        return {"username": "test_user@example.com", "password": "TestPass123!"}
+    if "search" in tokens or "find" in tokens or "lookup" in tokens:
+        return {"query": "sample search term"}
+    if "filter" in tokens:
+        return {"filter": "status:active"}
+    if "add" in tokens or "create" in tokens:
+        return {"payload": {"name": "Sample Item", "description": "Autogenerated"}}
+    # Default fallback: no data
+    return None
+
+
+def _derive_expected_outcome(prompt: str) -> str:
+    """
+    Create a stable expected outcome from the prompt using a deterministic rule.
+    If a verb like 'login', 'search', 'create' is present, tailor the expectation.
+    """
+    text = (prompt or "").lower()
+    if "login" in text or "signin" in text:
+        return "User is authenticated and redirected to the dashboard"
+    if "search" in text or "find" in text or "lookup" in text:
+        return "Search results relevant to the query are displayed"
+    if "create" in text or "add" in text:
+        return "New item is created and shown in the list"
+    if "update" in text or "edit" in text:
+        return "Item is updated and changes are visible"
+    if "delete" in text or "remove" in text:
+        return "Item is removed and no longer appears in the list"
+    return ""
+
+
+def _build_rationale(prompt: str, target_hint: str, context: Dict[str, Any]) -> str:
+    """
+    Build a concise, deterministic rationale string.
+    """
+    base_target = target_hint or "home page"
+    ctx_note = ""
+    # Include a small, stable reflection of context keys to help debugging.
+    if context:
+        keys = sorted([k for k in context.keys() if isinstance(k, str)])
+        if keys:
+            ctx_note = f" using context keys: {', '.join(keys)}"
+    # Trim prompt for concise rationale while staying deterministic.
+    trimmed_prompt = (prompt or "").strip()
+    if len(trimmed_prompt) > 120:
+        trimmed_prompt = trimmed_prompt[:117] + "..."
+
+    return (
+        f"Generated a 4-step template derived from the prompt targeting '{base_target}'."
+        f"{ctx_note} Prompt summary: '{trimmed_prompt}'."
+        " The steps follow a stable navigate-interact-submit-assert sequence"
+        " to unblock UI integration without external AI calls."
+    )
